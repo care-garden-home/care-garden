@@ -7,6 +7,11 @@ import { renderHome } from './screens/home.js';
 import { renderPlaceholder } from './screens/placeholder.js';
 import { todaysOccurrences, appointmentsOf, styleOf, shortKind } from './schedule-view.js';
 import { staleSheet } from './restore-ui.js';
+import { syncInfo } from './status-bar.js';
+import { configuredApiUrl } from './api-config.js';
+
+// 実運用版（接続先が設定されている）では、PC の模擬サーバー向けの開発用の呼び出し（/dev/…）は一切しない
+const DEV_SERVER = configuredApiUrl() === '/api';
 
 const SYNC_INTERVAL_MS = 30 * 60_000;
 
@@ -45,7 +50,12 @@ let renderTimer = null;
 const SCREENS = {};   // 画面名 → render(root, ctx)。ほかの画面のファイルが登録する
 export function registerScreen(name, fn) { SCREENS[name] = fn; }
 
-const ctx = { data, now, nav, refresh: () => render(true), get params() { return params; } };
+// 同期の操作（ヘッダーと HOME の情報パネルの同期ボタンで共通）。復元前の未送信は、内容を確かめてから選ぶ
+async function syncNow() {
+  if (data.counts.stale > 0) { staleSheet(ctx); return; }
+  await data.flush(); await data.sync();
+}
+const ctx = { data, now, nav, syncNow, refresh: () => render(true), get params() { return params; } };
 
 export function nav(to, p = {}) {
   screen = to; params = p;
@@ -83,20 +93,11 @@ function renderBar() {
   const t = now();
   barDate.textContent = fmtDate(t);
   renderBarAppts();
-  const c = data.counts;
-  let text; let level = '';
-  let lead = null;
-  if (data.maintenance) { text = '復元の作業中（記録は端末に保存されます）'; level = 'warn'; }
-  else if (c.stale > 0) { text = `復元前の未送信 ${c.stale}件`; level = 'alert'; lead = icon('alert', 'sm'); }
-  else if (c.rejected > 0 || c.conflict > 0 || c.authRequired > 0) { text = '保存できていない記録あり'; level = 'alert'; lead = icon('alert', 'sm'); }
-  else if (c.unsent > 0) { text = `未送信 ${c.unsent}件`; level = 'warn'; }
-  else if (data.syncState === 'failed') { text = '同期できませんでした'; level = 'warn'; }
-  else if (data.lastSyncMs) text = `${fmtTimeAmPm(data.lastSyncMs)} 同期`;
-  else text = '未同期';
+  const s = syncInfo(data);
   clear(barSync);
-  if (lead) barSync.append(lead);
-  barSync.append(text, icon('refresh', 'sm'));
-  barSync.className = `bar-sync${level ? ` ${level}` : ''}${data.syncState === 'syncing' ? ' busy' : ''}`;
+  if (s.alertIcon) barSync.append(icon('alert', 'sm'));
+  barSync.append(s.text, icon('refresh', 'sm'));
+  barSync.className = `bar-sync${s.level ? ` ${s.level}` : ''}${s.busy ? ' busy' : ''}`;
 }
 
 /** force＝画面の切り替え。そうでない更新（同期・時計）では、入力中のフォーム（data-keep）を作り直さない */
@@ -134,6 +135,7 @@ function renderPairing() {
     h('button', { class: 'btn', type: 'button', on: { click: () => go(input.value, null) } }, '登録する'));
   view.append(box);
   // 開発用：模擬サーバーのときだけ、コードの発行を代行するボタンを出す（本番には存在しない）
+  if (!DEV_SERVER) return;
   fetch('/dev/ping').then((r) => r.ok ? r.json() : null).then((j) => {
     if (!j?.mock || view.querySelector('.dev-panel') || document.body.dataset.screen !== 'pair') return;
     const dev = h('section', { class: 'panel dev-panel' }, h('h2', {}, '開発用（模擬サーバー）'),
@@ -149,10 +151,7 @@ function renderPairing() {
 }
 
 // ---- 同期のきっかけ ----
-barSync.addEventListener('click', async () => {
-  if (data.counts.stale > 0) { staleSheet(ctx); return; }   // 復元前の未送信は、内容を確かめてから選ぶ
-  await data.flush(); await data.sync();
-});
+barSync.addEventListener('click', syncNow);
 data.subscribe(() => render());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && data.hasToken) { data.flush(); data.sync(); } });
 window.addEventListener('online', () => { data.flush(); data.sync(); });
@@ -178,7 +177,7 @@ const screensReady = Promise.all(['./screens/infusion.js', './screens/schedule.j
 try { if ((!PREVIEW || PREVIEW_ONLY) && 'serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch { /* 無視 */ }
 
 // PC 内の試験環境（模擬サーバーで実際に保存できる）と、閲覧専用のプレビューを区別する。プレビューは「プレビュー」、模擬サーバーは「試験環境」の印
-if (!PREVIEW) fetch('/dev/ping').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.mock) { document.body.classList.add('is-mock'); } }).catch(() => {});
+if (!PREVIEW && DEV_SERVER) fetch('/dev/ping').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.mock) { document.body.classList.add('is-mock'); render(); } }).catch(() => {});
 
 data.init().then(() => render(true));
 render(true);

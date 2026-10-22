@@ -14,6 +14,7 @@ export const SCENARIOS = Object.freeze({
   paused: '一時中断',
   ended: '投与終了・終了処置待ち',
   closed: '終了処置 ✓ DONE',
+  forgot: '終了処置 ? FORGET（実施したか不明）',
   cancelled: '中止',
   history: '履歴の一覧（複数件）',
 });
@@ -47,6 +48,10 @@ export function createPreviewData({ apptCount, scenario = 'running', role = 'adm
     case 'closed':
       infusions.push(inf({ plan_start_ms: t - 13 * HOUR }));
       events.push(ev(1, 'start', t - 13 * HOUR, { rate: 125 }), ev(2, 'end', t - 40 * MIN), ev(3, 'flush', t - 30 * MIN, { flush_status: 'done' }));
+      break;
+    case 'forgot':
+      infusions.push(inf({ plan_start_ms: t - 13 * HOUR }));
+      events.push(ev(1, 'start', t - 13 * HOUR, { rate: 125 }), ev(2, 'end', t - 40 * MIN), ev(3, 'flush_skip', t - 30 * MIN, { flush_status: 'unknown' }));
       break;
     case 'cancelled':
       infusions.push(inf({ plan_start_ms: t + HOUR }));

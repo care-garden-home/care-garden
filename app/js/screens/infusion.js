@@ -440,11 +440,27 @@ function endSheet(ctx, cur, order) {
   }, '確認へ');
 }
 
+/** HOME から：確認画面なしで、いま DONE／FORGET を記録する（closureSheet の1タップと同じ記録・同じ検査） */
+export async function quickClosure(ctx, cur, order, kind) {
+  if (previewBlocked()) return { ok: false };
+  const t = ctx.now();
+  const event = kind === 'done'
+    ? { type: 'flush', occurred_ms: t, flush_status: 'done' }
+    : { type: 'flush_skip', occurred_ms: t, flush_status: 'unknown' };
+  const v = validateRecord('infusion_events', event, { nowMs: t });
+  if (!v.ok) { toast('記録できませんでした'); return { ok: false }; }
+  const tried = tryEvent(cur, order, event, t);
+  if (tried.errors.length) { toast(tried.errors.map(errText).join(' / ')); return { ok: false }; }
+  const r = await ctx.data.appendEvent(cur.infusion.id, event);
+  if (r.ok) toast(`${kind === 'done' ? '✓ DONE' : '? FORGET'} ${fmtTimeAmPm(t)} を記録しました（共有待ち）`); else toast(r.message ?? '記録できませんでした');
+  return r;
+}
+
 // 終了処置：見出し＋【✓ DONE】【? FORGET】。押したらその場で記録する（確認画面なし。誤りは履歴の訂正で直す）。
 //   DONE＝実施した記録（いまの時刻）／FORGET＝実施したか不明の記録（完了でも未実施でもない。再実施は促さない）。
 // 日時の変更・メモ・医療者の指示は、必要なときだけ開く（任意）。
 // correction＝FORGET のあとで、実施したと確認できたときだけ DONE に訂正する（確認あり。元の FORGET の記録は残る）。
-function closureSheet(ctx, cur, order, correction = false) {
+export function closureSheet(ctx, cur, order, correction = false) {
   const t = ctx.now();
   const f = { when: dateTimeField('実施した日時', { value: t }), note: textField('メモ（任意）', { multiline: true }), by: performerField(ctx) };
   const instr = order?.flush_instruction?.trim();

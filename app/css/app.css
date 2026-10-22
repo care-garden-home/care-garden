@@ -344,3 +344,35 @@ body[data-screen="home"] .bar-sync { min-height: 36px; height: 36px; }
 .phone-actions.compact .phone-num { font-size: 16px; }
 /* 流量の候補：希望時刻に最も近い候補を目立たせる */
 .cand-best { box-shadow: inset 0 0 0 2px var(--deep); }
+
+/* ---- HOME：上部ヘッダーを廃止し、日付・予定・同期を下部の情報パネルへ統合（庭園を上から下まで広く） ---- */
+body[data-screen="home"] #bar { display: none; }
+body[data-screen="home"] #view { padding: 0 10px 3px; }
+body[data-screen="home"] .panel.hm-panel { padding: 6px 10px 8px; }
+.hm-top { display: flex; align-items: center; gap: 6px; min-height: 44px; }
+.hm-date { font-size: 16px; font-weight: 500; color: var(--deep); white-space: nowrap; }
+.hm-top .hm-head { width: auto; min-height: 44px; flex: 0 1 auto; justify-content: flex-start; }
+.hm-top .hm-head .state { font-size: 14px; }
+.hm-mode { font-size: 10px; padding: 0 6px; border-radius: 8px; background: #F5E7B8; color: #6B4E00; line-height: 16px; white-space: nowrap; }
+.is-mock .hm-mode { background: #DCEBDD; color: #1F5A33; }
+.hm-sync { margin-left: auto; border: 0; background: transparent; min-height: 44px; padding: 0 4px; font-size: 12px; line-height: 1.25; color: var(--ink-soft); text-align: right; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border-radius: 8px; }
+.hm-sync.warn { color: var(--amber); font-weight: 500; }
+.hm-sync.alert { color: var(--danger); font-weight: 500; }
+.hm-sync.busy { opacity: .6; }
+.hm-appts { display: flex !important; flex-wrap: wrap; gap: 6px; margin: 0 0 2px; }
+.hm-appt { min-height: 44px; }
+.hm-appt.hm-more { background: #E4E7E1; color: #454840; }
+.hm-end { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: end; }
+.hm-end .k { grid-column: 1 / -1; }
+.hm-end .hm-sub { text-align: right; padding-bottom: 3px; }
+.btn.btn-forget-home { background: #E6E3EE; color: #433C5C; }
+.btn.btn-quiet { background: #DCE5D8; color: #3F5A46; }
+@media (max-width: 380px) { .hm-sync { font-size: 11px; } .hm-date { font-size: 15px; } }
+/* HOME 情報パネル：1段目を1行に収める（試用版の表示はパネルの上端に小さく出す） */
+body[data-screen="home"] .panel.hm-panel { position: relative; }
+.hm-mode { position: absolute; top: -9px; left: 12px; font-size: 11px; line-height: 17px; padding: 0 8px; border: 1px solid rgba(0,0,0,.08); }
+.hm-sync { white-space: nowrap; }
+.hm-top { flex-wrap: nowrap; }
+.hm-top .hm-head { flex: 0 0 auto; }
+.hm-appts { gap: 5px; }
+.hm-appts .hm-appt { padding: 0 9px; font-size: 13px; flex: 0 0 auto; }

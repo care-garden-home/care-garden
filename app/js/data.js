@@ -3,6 +3,7 @@
 //   読み：端末内のキャッシュ（同期で受け取った記録）＋未送信の操作を重ねた表示
 // 通信は send(request) だけに依存する。本番では同じ形の要求を GAS へ送る実装に差し替える。
 
+import { configuredApiUrl } from './api-config.js';
 import { createAsyncLedger, saveOperation } from '../../src/client/ledger-async.js';
 import { createIdbLedgerStorage } from '../../src/client/idb-storage.js';
 import { createAsyncMemoryStorage } from '../../src/client/ledger-async.js';
@@ -27,7 +28,8 @@ function fallbackUuid() {
 }
 
 /** 通信：本番の GAS と同じ形の要求を送り、応答（JSON）か null（通信できなかった）を返す */
-export async function httpSend(request, { url = '/api', timeoutMs = 20_000 } = {}) {
+export async function httpSend(request, { url = configuredApiUrl(), timeoutMs = 20_000 } = {}) {
+  if (url === null) return null;   // 許されない接続先（設定の誤り）には、何も送らない
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
