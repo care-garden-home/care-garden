@@ -304,6 +304,17 @@ const VALIDATORS = {
   settings(d, c) {
     if (!c.required('key')) return;
     c.text('key', 64);
+    // 予定先マスタ：key＝place:<ID>、value＝{ name, kinds[], phone?, address?, travel_min?, arrival_margin_min? }（母娘で共有する設定。書けるのは管理者のみ）
+    if (typeof d.key === 'string' && d.key.startsWith('place:')) {
+      const v = d.value;
+      const okNum = (x) => x === undefined || x === null || (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 600);
+      const okText = (x, max) => x === undefined || x === null || (typeof x === 'string' && x.length <= max);
+      const phoneOk = v && (v.phone === undefined || v.phone === null || v.phone === '' || (typeof v.phone === 'string' && /^[0-9+()\-\s]{6,20}$/.test(v.phone) && /\d{5,}/.test(v.phone.replace(/\D/g, ''))));
+      const keysOk = isObj(v) && Object.keys(v).every((k) => ['name', 'kinds', 'phone', 'address', 'travel_min', 'arrival_margin_min'].includes(k));
+      if (!keysOk || typeof v.name !== 'string' || !v.name.trim() || v.name.length > 100 || !Array.isArray(v.kinds) || v.kinds.length < 1
+        || !v.kinds.every((k) => APPT_KINDS.includes(k)) || !phoneOk || !okText(v.address, 200) || !okNum(v.travel_min) || !okNum(v.arrival_margin_min)) c.add('value', 'BAD_CHOICE');
+      return;
+    }
     if (d.key === 'birthday') {
       const v = d.value;
       if (v === null || v === undefined) return;                 // 登録を消す

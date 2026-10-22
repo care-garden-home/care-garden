@@ -2,6 +2,7 @@
 // 予定の登録・変更は管理者だけ（サーバー側でも強制）。母は、確認・電話・実施の記録・質問メモ・訪問メモを残せる。
 // 予定（予約の状態）・予定の変更/中止・実績（実施済み/未実施）は、別の層として別々に表示する。
 
+import { listPlaces, findPlace } from '../places.js';
 import { h, why, clear, openSheet, confirmSheet, toast, previewBlocked, fmtWhen, fmtDuration, fmtDateShort, icon, toLocalInput, fromLocalInput, toDateInput } from '../ui.js';
 import { textField, numberField, selectField, dateField, timeField, dateTimeField, choiceField, showErrors } from '../forms.js';
 import { validateRecord, APPT_KINDS } from '../../../src/validation/records.js';
@@ -86,6 +87,8 @@ function renderDetail(root, ctx, o, t) {
     h('div', { class: 'srow-tags' }, tag(`予約：${BOOKING_LABEL[a.booking] ?? '—'}`),
       o.status === 'changed' ? tag('この回は変更あり') : null, o.status === 'cancelled' ? tag('この回は中止') : null,
       tag(`実績：${outcome ? OUTCOME_LABEL[outcome] : '未記録'}`, outcome ? '' : 'pending')));
+  const place = findPlace(listPlaces(ctx.data), a.provider, a.kind);
+  if (place?.address) head.append(h('div', { class: 'fine' }, place.address));
   if (a.phone) head.append(h('a', { class: 'btn soft telbtn', href: `tel:${a.phone.replace(/[^0-9+]/g, '')}` }, icon('phone', 'sm'), ` ${a.phone}`));
   if (a.staff) head.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, '担当者'), h('span', {}, a.staff)));
   if (a.memo) head.append(h('p', { style: 'white-space:pre-wrap;margin:6px 0 0' }, a.memo));
@@ -476,6 +479,36 @@ function apptSheet(ctx, series, occurrence) {
     travel: numberField('移動時間（分）', { value: base.travel_min, inputMode: 'numeric', hint: '自宅から病院まで。出発の目安の計算に使います' }),
     margin: numberField('到着の余裕（分）', { value: base.arrival_margin_min ?? DEFAULT_ARRIVAL_MARGIN_MIN, inputMode: 'numeric', hint: '診療予約の何分前に着くか（日赤は60分）' }),
   };
+  // 予定先（設定の予定先マスタ）：選ぶと、名称・電話番号・移動時間・到着の余裕が入る。「その他」は自由入力
+  const places = listPlaces(ctx.data);
+  const OTHER = '__other__';
+  const placeOpts = () => places.filter((p) => p.kinds.includes(f.kind.get())).map((p) => [p.id, p.name]).concat([[OTHER, 'その他（自由入力）']]);
+  const initial = findPlace(places, base.provider, base.kind);
+  const firstOpts = placeOpts();
+  // 新規：その種類の最初の予定先を選んでおく（日時とメモだけ入れれば済むように）。編集：いまの予定先に合うものがあればそれ
+  f.place = selectField('予定先', firstOpts, { value: initial && initial.kinds.includes(base.kind ?? '訪問看護') ? initial.id : (!series && firstOpts[0][0] !== OTHER ? firstOpts[0][0] : OTHER) });
+  const redrawPlace = () => {
+    const cur = f.place.input.value;
+    const opts = placeOpts();
+    f.place.input.replaceChildren(...opts.map(([v, text]) => h('option', { value: String(v) }, text)));
+    f.place.input.value = opts.some(([v]) => v === cur) ? cur : opts[0][0];   // 種類を変えて合わなくなったら、その種類の最初の予定先（なければ「その他」）
+  };
+  let autoFilled = false;
+  const fillFromPlace = () => {
+    const p = places.find((x) => x.id === f.place.input.value);
+    if (!p && autoFilled) { f.provider.set(''); f.phone.set(''); autoFilled = false; }   // 自動で入れた内容は、「その他」に切り替えたら消す（手入力した内容は消さない）
+    if (p) {
+      autoFilled = true;
+      f.provider.set(p.name); f.phone.set(p.phone ?? '');
+      if (p.travel_min != null) f.travel.set(p.travel_min);
+      if (p.arrival_margin_min != null) f.margin.set(p.arrival_margin_min);
+    }
+    detail.hidden = Boolean(p) && Boolean(places.length);
+    placeSummary.textContent = p ? [p.phone, p.address].filter(Boolean).join('　') : '';
+  };
+  const placeSummary = h('p', { class: 'fine', style: 'margin:0 0 6px' });
+  const detail = h('div', {}, f.provider.el, f.phone.el);
+  const placeBox = places.length ? h('div', {}, f.place.el, placeSummary) : null;
   const recurBox = h('div', {}, f.freq.el, h('div', { class: 'wk' }, f.weekday.el), h('div', { class: 'dy' }, f.day.el), f.until.el);
   const tripBox = h('div', {}, h('div', { class: 'grid2' }, f.travel.el, f.margin.el));
   const sync = () => {
@@ -483,11 +516,12 @@ function apptSheet(ctx, series, occurrence) {
     recurBox.querySelector('.wk').hidden = fr !== 'weekly'; recurBox.querySelector('.dy').hidden = fr !== 'monthly'; f.until.el.hidden = fr === 'none';
     tripBox.hidden = f.kind.get() !== '通院';
   };
-  f.freq.input.addEventListener('change', sync); f.kind.input.addEventListener('change', sync);
+  f.freq.input.addEventListener('change', sync); f.kind.input.addEventListener('change', () => { sync(); redrawPlace(); fillFromPlace(); });
+  f.place.input.addEventListener('change', fillFromPlace);
   const msg = h('p', { class: 'err', role: 'alert' });
   const title = oneOff ? 'この回だけ変更' : series ? '予定を変更' : '予定を登録';
   openSheet(title, (close) => [h('div', { 'data-keep': '' },
-    f.kind.el, h('div', { class: 'grid2' }, f.date.el, f.start.el), f.end.el, f.provider.el, f.phone.el, f.staff.el, f.memo.el, f.booking.el,
+    f.kind.el, placeBox, detail, h('div', { class: 'grid2' }, f.date.el, f.start.el), f.end.el, f.staff.el, f.memo.el, f.booking.el,
     oneOff ? h('p', { class: 'fine' }, `${md(occurrence.startMs)} の回だけを変更します（他の回は変わりません）`) : recurBox, tripBox, msg),
     h('button', { class: 'btn', type: 'button', on: { click: async () => {
       msg.textContent = '';
@@ -512,4 +546,6 @@ function apptSheet(ctx, series, occurrence) {
     } } }, '確認へ'),
     h('button', { class: 'btn secondary', type: 'button', on: { click: () => close() } }, 'やめる')]);
   sync();
+  if (!series) fillFromPlace(); else detail.hidden = Boolean(initial) && initial.kinds.includes(base.kind) && places.length > 0 && f.place.input.value !== OTHER;
+  if (series) placeSummary.textContent = initial ? [initial.phone, initial.address].filter(Boolean).join('　') : '';
 }

@@ -116,7 +116,13 @@ export function createPreviewData({ apptCount, scenario = 'running', role = 'adm
       { id: uid(702), version: 1, entry: 'question', content: '入浴の頻度はこのままでよいか', kind: '訪問看護', provider: 'さくら訪問看護ステーション', created_by: 'u_admin', created_ms: t - 9 * 24 * HOUR, deleted_ms: null },
       { id: uid(703), version: 1, entry: 'check', question_id: uid(702), checked: true, created_by: 'u_mother', created_ms: t - 24 * HOUR, deleted_ms: null },
     ] : [],
-    settings: birthday ? [{ id: uid(300), version: 1, key: 'birthday', value: birthday, created_ms: t, deleted_ms: null }] : [],
+    settings: [
+      ...(birthday ? [{ id: uid(300), version: 1, key: 'birthday', value: birthday, created_ms: t, deleted_ms: null }] : []),
+      // 予定先マスタ（架空）。同じ事業者が訪問看護と訪問リハの両方を持つ例を含む
+      { id: uid(310), version: 1, key: 'place:p1', value: { name: 'さくら訪問看護ステーション', kinds: ['訪問看護', '訪問リハビリ'], phone: '0467-00-0001' }, scope: 'global', created_ms: t, deleted_ms: null },
+      { id: uid(311), version: 1, key: 'place:p2', value: { name: '日本赤十字社 医療センター', kinds: ['通院'], phone: '03-1234-5678', address: '（架空）東京都○○区1-2-3', travel_min: 120, arrival_margin_min: 60 }, scope: 'global', created_ms: t, deleted_ms: null },
+      { id: uid(312), version: 1, key: 'place:p3', value: { name: 'あおぞら在宅クリニック', kinds: ['訪問診療'], phone: '0467-00-0003' }, scope: 'global', created_ms: t, deleted_ms: null },
+    ],
     needle_handovers: extras ? [{ id: uid(420), version: 1, status: 'handed_over', handover_on: new Date(t + 9 * HOUR - 4 * 24 * HOUR).toISOString().slice(0, 10), destination: '訪問診療', created_ms: t - 4 * 24 * HOUR, deleted_ms: null }] : [],
   };
 

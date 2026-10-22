@@ -1,14 +1,15 @@
 // 設定・データ（管理者のみ）：端末、点滴の指示、誕生日（背景）、出力（CSV・JSON）、復元の検証、廃棄物（針の引き渡し）。
 // 権限はサーバー側でも強制される。母の画面にはこのタブを出さない。
 
-import { h, why, clear, openSheet, confirmSheet, toast, fmtWhen, fmtDate, toDateInput } from '../ui.js';
+import { h, why, clear, openSheet, confirmSheet, toast, previewBlocked, fmtWhen, fmtDate, toDateInput } from '../ui.js';
 import { textField, numberField, selectField, dateField, choiceField, showErrors } from '../forms.js';
-import { validateRecord, normalizeBirthday, HANDOVER_STATUS } from '../../../src/validation/records.js';
+import { validateRecord, normalizeBirthday, HANDOVER_STATUS, APPT_KINDS } from '../../../src/validation/records.js';
 import { toCsv, filterByPeriod, dayRangeMs } from '../../../src/export/csv.js';
 import { createBackup, serializeBackup, validateFile, verifyRestorable } from '../../../src/backup/backup.js';
 import { sha256Hex } from '../sha256.js';
 import { uuid } from '../data.js';
 import { startRestore, showUnfinishedRestore } from '../restore-ui.js';
+import { listPlaces, PLACE_PREFIX } from '../places.js';
 
 export const APP_VERSION = '0.1.0';
 
@@ -17,7 +18,7 @@ export function register(registerScreen) {
 }
 
 let tab = 'devices';
-const TABS = [['devices', '端末'], ['orders', '点滴の指示'], ['birthday', '背景'], ['export', '出力'], ['restore', '復元'], ['waste', '廃棄物']];
+const TABS = [['devices', '端末'], ['places', '予定先'], ['orders', '点滴の指示'], ['birthday', '背景'], ['export', '出力'], ['restore', '復元'], ['waste', '廃棄物']];
 
 function renderSettings(root, ctx) {
   if (TABS.some(([k]) => k === ctx.params?.intent)) { tab = ctx.params.intent; ctx.params.intent = null; }
@@ -25,7 +26,7 @@ function renderSettings(root, ctx) {
   if (ctx.data.role !== 'admin') { root.append(h('section', { class: 'panel' }, 'この画面は管理者だけが使えます')); return; }
   root.append(h('div', { class: 'seg', role: 'tablist', style: 'margin-bottom:12px' },
     ...TABS.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-pressed': k === tab ? 'true' : 'false', on: { click: () => { tab = k; ctx.refresh(); } } }, label))));
-  ({ devices: renderDevices, orders: renderOrders, birthday: renderBirthday, export: renderExport, restore: renderRestore, waste: renderWaste })[tab](root, ctx);
+  ({ devices: renderDevices, places: renderPlaces, orders: renderOrders, birthday: renderBirthday, export: renderExport, restore: renderRestore, waste: renderWaste })[tab](root, ctx);
 }
 
 const panel = (title, ...children) => h('section', { class: 'panel', style: 'margin-bottom:12px' }, title ? h('h2', { style: 'font-size:19px;margin-bottom:6px' }, title) : null, ...children);
@@ -83,6 +84,68 @@ function issueSheet(ctx, out) {
         h('div', { class: 'big', style: 'letter-spacing:.12em;text-align:center' }, r.code), h('p', { class: 'muted' }, 'コードは他の人に見せないでください。この画面を閉じると、もう表示されません。')));
     } } }, '発行する'),
     h('button', { class: 'btn secondary', type: 'button', on: { click: () => close() } }, 'やめる')]);
+}
+
+// ---------------------------------------------------------------------------
+// 予定先マスタ：予定を作るたびに名称・電話番号を入力しなくてよいように、よく使う予定先を登録しておく（母娘で共有する設定）
+
+function renderPlaces(root, ctx) {
+  const places = listPlaces(ctx.data);
+  root.append(panel('予定先', h('p', { class: 'fine' }, '登録した予定先は、予定の登録で選ぶだけで、名称・電話番号などが入ります'),
+    h('button', { class: 'btn', type: 'button', on: { click: () => placeSheet(ctx, null) } }, '予定先を追加')));
+  const list = h('ul', { class: 'list' });
+  for (const p of places) {
+    list.append(h('li', {},
+      h('strong', {}, p.name), p.id && ctx.data.list('settings').find((x) => x.id === p.id)?._pending ? h('span', { class: 'tag pending' }, '未送信') : null,
+      h('div', { class: 'muted' }, p.kinds.join('・')),
+      p.phone ? h('div', { class: 'muted' }, p.phone) : null,
+      p.address ? h('div', { class: 'muted' }, p.address) : null,
+      p.travel_min != null || p.arrival_margin_min != null ? h('div', { class: 'muted' }, `${p.travel_min != null ? `移動 ${p.travel_min}分` : ''}${p.arrival_margin_min != null ? `　到着の余裕 ${p.arrival_margin_min}分` : ''}`) : null,
+      h('button', { class: 'link', type: 'button', on: { click: () => placeSheet(ctx, p) } }, '直す')));
+  }
+  root.append(panel('登録されている予定先', places.length ? list : h('p', { class: 'muted' }, 'まだ登録がありません')));
+}
+
+function placeSheet(ctx, existing) {
+  const f = {
+    name: textField('名称', { value: existing?.name }),
+    phone: textField('電話番号', { value: existing?.phone, placeholder: '例 0467-00-0000' }),
+    address: textField('住所（必要な場合）', { value: existing?.address, multiline: true }),
+    travel: numberField('移動時間（分・通院など）', { value: existing?.travel_min, inputMode: 'numeric' }),
+    margin: numberField('到着の余裕（分・通院など）', { value: existing?.arrival_margin_min, inputMode: 'numeric' }),
+  };
+  const picked = new Set(existing?.kinds ?? []);
+  const kindBtns = APPT_KINDS.map((k) => h('button', { type: 'button', class: 'sbtn', 'aria-pressed': String(picked.has(k)), on: { click: (e) => {
+    if (picked.has(k)) picked.delete(k); else picked.add(k);
+    e.currentTarget.setAttribute('aria-pressed', String(picked.has(k)));
+  } } }, k));
+  const msg = h('p', { class: 'err', role: 'alert' });
+  openSheet(existing ? '予定先を直す' : '予定先を追加', (close) => [h('div', { 'data-keep': '' },
+    f.name.el,
+    h('div', { class: 'lbl', style: 'font-size:15px;color:var(--ink-soft)' }, '予定の種類（同じ事業者で複数あれば、すべて選ぶ）'), h('div', { class: 'sgrid' }, ...kindBtns),
+    f.phone.el, f.address.el, h('div', { class: 'grid2' }, f.travel.el, f.margin.el), msg),
+  h('button', { class: 'btn', type: 'button', on: { click: async () => {
+    msg.textContent = '';
+    const value = { name: f.name.get(), kinds: APPT_KINDS.filter((k) => picked.has(k)) };
+    if (f.phone.get()) value.phone = f.phone.get();
+    if (f.address.get()) value.address = f.address.get();
+    if (f.travel.get() !== undefined) value.travel_min = f.travel.get();
+    if (f.margin.get() !== undefined) value.arrival_margin_min = f.margin.get();
+    if (!value.name) { msg.textContent = '名称を入力してください'; return; }
+    if (!value.kinds.length) { msg.textContent = '予定の種類を1つ以上選んでください'; return; }
+    const data = { key: existing?.key ?? `${PLACE_PREFIX}${uuid()}`, value, scope: 'global' };
+    const check = validateRecord('settings', data);
+    if (!check.ok) { msg.textContent = check.errors.some((e) => e.code === 'BAD_CHOICE') ? '電話番号や数値の入力を確かめてください' : check.errors.map((e) => e.message).join(' / '); return; }
+    if (previewBlocked()) return;
+    const r = existing ? await ctx.data.updateRecord('settings', existing.id, existing.version, data) : await ctx.data.createRecord('settings', data);
+    if (r.ok) { toast('予定先を保存しました'); close(); ctx.refresh(); } else msg.textContent = r.message ?? '保存できませんでした';
+  } } }, '保存する'),
+  existing ? h('button', { class: 'btn secondary', type: 'button', on: { click: async () => {
+    if (!await confirmSheet({ title: 'この予定先を消しますか？', lines: ['登録済みの予定は変わりません'], okLabel: '消す', danger: true })) return;
+    if (previewBlocked()) return;
+    const r = await ctx.data.softDelete('settings', existing.id, existing.version); toast(r.ok ? '消しました' : r.message); close(); ctx.refresh();
+  } } }, 'この予定先を消す') : null,
+  h('button', { class: 'btn secondary', type: 'button', on: { click: () => close() } }, 'やめる')]);
 }
 
 // ---------------------------------------------------------------------------
