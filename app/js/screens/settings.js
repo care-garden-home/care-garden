@@ -10,6 +10,7 @@ import { sha256Hex } from '../sha256.js';
 import { uuid } from '../data.js';
 import { startRestore, showUnfinishedRestore } from '../restore-ui.js';
 import { listPlaces, PLACE_PREFIX } from '../places.js';
+import { phoneActions } from '../phone.js';
 
 export const APP_VERSION = '0.1.0';
 
@@ -98,7 +99,7 @@ function renderPlaces(root, ctx) {
     list.append(h('li', {},
       h('strong', {}, p.name), p.id && ctx.data.list('settings').find((x) => x.id === p.id)?._pending ? h('span', { class: 'tag pending' }, '未送信') : null,
       h('div', { class: 'muted' }, p.kinds.join('・')),
-      p.phone ? h('div', { class: 'muted' }, p.phone) : null,
+      p.phone ? phoneActions(p.phone, { compact: true }) : null,
       p.address ? h('div', { class: 'muted' }, p.address) : null,
       p.travel_min != null || p.arrival_margin_min != null ? h('div', { class: 'muted' }, `${p.travel_min != null ? `移動 ${p.travel_min}分` : ''}${p.arrival_margin_min != null ? `　到着の余裕 ${p.arrival_margin_min}分` : ''}`) : null,
       h('button', { class: 'link', type: 'button', on: { click: () => placeSheet(ctx, p) } }, '直す')));

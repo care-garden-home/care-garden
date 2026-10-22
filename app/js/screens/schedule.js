@@ -3,6 +3,7 @@
 // 予定（予約の状態）・予定の変更/中止・実績（実施済み/未実施）は、別の層として別々に表示する。
 
 import { listPlaces, findPlace } from '../places.js';
+import { phoneActions } from '../phone.js';
 import { h, why, clear, openSheet, confirmSheet, toast, previewBlocked, fmtWhen, fmtDuration, fmtDateShort, icon, toLocalInput, fromLocalInput, toDateInput } from '../ui.js';
 import { textField, numberField, selectField, dateField, timeField, dateTimeField, choiceField, showErrors } from '../forms.js';
 import { validateRecord, APPT_KINDS } from '../../../src/validation/records.js';
@@ -89,7 +90,7 @@ function renderDetail(root, ctx, o, t) {
       tag(`実績：${outcome ? OUTCOME_LABEL[outcome] : '未記録'}`, outcome ? '' : 'pending')));
   const place = findPlace(listPlaces(ctx.data), a.provider, a.kind);
   if (place?.address) head.append(h('div', { class: 'fine' }, place.address));
-  if (a.phone) head.append(h('a', { class: 'btn soft telbtn', href: `tel:${a.phone.replace(/[^0-9+]/g, '')}` }, icon('phone', 'sm'), ` ${a.phone}`));
+  if (a.phone) head.append(phoneActions(a.phone));
   if (a.staff) head.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, '担当者'), h('span', {}, a.staff)));
   if (a.memo) head.append(h('p', { style: 'white-space:pre-wrap;margin:6px 0 0' }, a.memo));
   root.append(head);

@@ -336,3 +336,11 @@ body[data-screen="home"] .bar-sync { min-height: 36px; height: 36px; }
 .state.st-unknown { background: #E6E3EE; color: #433C5C; }
 .cl-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .btn-forget { min-height: 72px; font-size: 20px; letter-spacing: .04em; background: #E6E3EE; color: #433C5C; }
+
+/* 電話番号の操作（コピー・電話する） */
+.phone-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.phone-num { font-size: 18px; letter-spacing: .02em; margin-right: 4px; }
+.phone-btn { min-height: 44px; padding: 0 16px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; font-size: 16px; }
+.phone-actions.compact .phone-num { font-size: 16px; }
+/* 流量の候補：希望時刻に最も近い候補を目立たせる */
+.cand-best { box-shadow: inset 0 0 0 2px var(--deep); }

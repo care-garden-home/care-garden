@@ -377,11 +377,14 @@ function suggestSheet(ctx, cur, order) {
     if (r.status === 'too_late') out.append(h('p', { class: 'note', style: 'color:var(--danger)' }, `許可された範囲（上限 ${r.bounds.max} mL/h）では、希望の時刻に間に合いません。上限でも ${fmtWhen(r.best.endMs)} の見込みです。`));
     if (r.status === 'too_early') out.append(h('p', { class: 'note' }, `許可された範囲（下限 ${r.bounds.min} mL/h）でも、希望より早く終わる見込みです（${fmtWhen(r.best.endMs)}）。`));
     out.append(h('p', { class: 'fine' }, `残量の推定 ${Math.round(cur.calc.remainingMl)} mL ／ 計算上の必要流量 ${Math.round(r.idealRate * 10) / 10} mL/h`));
-    for (const c of r.candidates) {
-      const isBest = c.rate === r.best.rate;
-      out.append(h('div', { class: 'panel', style: 'margin-top:8px;padding:10px 12px' },
-        h('div', { class: 'kv' }, h('span', { class: 'k' }, isBest ? '最も近い候補' : '次の候補'), h('span', { class: 'num', style: 'font-size:24px;font-weight:500' }, `${c.rate} mL/h`)),
-        h('div', { class: 'muted' }, `終了の見込み（推定）${fmtWhen(c.endMs)}　${diffText(c.diffMs)}${c.inUsual ? '　通常の範囲内' : ''}`),
+    // 希望時刻との差が最小の候補（同程度なら、従来の選び方＝r.best）を最上段に。ほかは「別の候補」として下に
+    const ordered = [r.best, ...r.candidates.filter((c) => c.rate !== r.best.rate)];
+    for (const c of ordered) {
+      const isBest = c === r.best;
+      out.append(h('div', { class: `panel${isBest ? ' cand-best' : ''}`, style: 'margin-top:8px;padding:10px 12px' },
+        h('div', { class: 'kv' }, h('span', { class: 'k' }, isBest ? '希望時刻に最も近い候補' : '別の候補'), h('span', { class: 'num', style: 'font-size:24px;font-weight:500' }, `${c.rate} mL/h`)),
+        h('div', {}, `終了の見込み（推定） `, h('strong', { class: 'num' }, fmtWhen(c.endMs))),
+        h('div', { class: 'muted' }, `${diffText(c.diffMs)}${c.inUsual ? '　通常の範囲内' : ''}`),
         h('button', { class: 'btn soft', type: 'button', style: 'margin-top:8px', on: { click: () => { document.getElementById('overlay').hidden = true; clear(document.getElementById('overlay')); rateSheet(ctx, cur, order, c.rate); } } }, 'この流量で変更を記録')));
     }
     out.append(h('p', { class: 'fine' }, '計算上の候補です。ポンプに設定したら「流量の変更を記録」で残します。'));

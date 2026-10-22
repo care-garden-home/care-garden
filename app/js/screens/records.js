@@ -21,6 +21,8 @@ function renderRecords(root, ctx) {
   if (params?.intent === 'health') { tab = 'health'; params.intent = null; queueMicrotask(() => healthSheet(ctx, null)); }
   if (params?.intent === 'needle') { tab = 'needle'; params.intent = null; }
   clear(root);
+  // 新規の入口：どの切り替えを開いていても、いちばん上から体調を記録できる
+  root.append(h('button', { class: 'btn', type: 'button', style: 'margin-bottom:12px', on: { click: () => healthSheet(ctx, null) } }, '＋ 体調を記録'));
   root.append(h('div', { class: 'seg', role: 'tablist', style: 'margin-bottom:12px' },
     ...TABS.map(([k, label]) => h('button', { type: 'button', role: 'tab', 'aria-pressed': k === tab ? 'true' : 'false', on: { click: () => { tab = k; ctx.refresh(); } } }, label))));
   if (tab === 'health') renderHealth(root, ctx);
@@ -62,7 +64,6 @@ function formSheet(ctx, title, fields, body, build, { confirm, submit, okText, s
 
 function renderHealth(root, ctx) {
   const t = ctx.now();
-  root.append(h('button', { class: 'btn', type: 'button', on: { click: () => healthSheet(ctx, null) } }, '体調を記録'));
   const logs = ctx.data.list('health_logs').sort((a, b) => b.logged_ms - a.logged_ms);
   root.append(monthSummary(ctx, logs));
   const box = h('section', { class: 'panel hist', style: 'margin-top:10px' });
