@@ -482,16 +482,20 @@ function apptSheet(ctx, series, occurrence) {
   // 予定先（設定の予定先マスタ）：選ぶと、名称・電話番号・移動時間・到着の余裕が入る。「その他」は自由入力
   const places = listPlaces(ctx.data);
   const OTHER = '__other__';
-  const placeOpts = () => places.filter((p) => p.kinds.includes(f.kind.get())).map((p) => [p.id, p.name]).concat([[OTHER, 'その他（自由入力）']]);
+  const candidates = () => places.filter((p) => p.kinds.includes(f.kind.get()));
+  // 候補が複数なら、誤登録を避けるため初期は未選択（'')。1件だけなら自動で選ぶ。なければ「その他」だけ
+  const placeOpts = () => {
+    const c = candidates();
+    return [...(c.length > 1 ? [['', '予定先を選んでください']] : []), ...c.map((p) => [p.id, p.name]), [OTHER, 'その他（自由入力）']];
+  };
+  const defaultPlace = () => { const c = candidates(); return c.length === 1 ? c[0].id : c.length > 1 ? '' : OTHER; };
   const initial = findPlace(places, base.provider, base.kind);
-  const firstOpts = placeOpts();
-  // 新規：その種類の最初の予定先を選んでおく（日時とメモだけ入れれば済むように）。編集：いまの予定先に合うものがあればそれ
-  f.place = selectField('予定先', firstOpts, { value: initial && initial.kinds.includes(base.kind ?? '訪問看護') ? initial.id : (!series && firstOpts[0][0] !== OTHER ? firstOpts[0][0] : OTHER) });
+  f.place = selectField('予定先', placeOpts(), { value: series ? (initial && initial.kinds.includes(base.kind) ? initial.id : OTHER) : defaultPlace() });
   const redrawPlace = () => {
     const cur = f.place.input.value;
     const opts = placeOpts();
     f.place.input.replaceChildren(...opts.map(([v, text]) => h('option', { value: String(v) }, text)));
-    f.place.input.value = opts.some(([v]) => v === cur) ? cur : opts[0][0];   // 種類を変えて合わなくなったら、その種類の最初の予定先（なければ「その他」）
+    f.place.input.value = opts.some(([v]) => v === cur) ? cur : defaultPlace();   // 種類を変えて合わなくなったら、その種類の既定（1件なら自動、複数なら未選択）
   };
   let autoFilled = false;
   const fillFromPlace = () => {
@@ -503,7 +507,7 @@ function apptSheet(ctx, series, occurrence) {
       if (p.travel_min != null) f.travel.set(p.travel_min);
       if (p.arrival_margin_min != null) f.margin.set(p.arrival_margin_min);
     }
-    detail.hidden = Boolean(p) && Boolean(places.length);
+    detail.hidden = f.place.input.value !== OTHER;   // 名称・電話番号の入力欄は「その他（自由入力）」のときだけ
     placeSummary.textContent = p ? [p.phone, p.address].filter(Boolean).join('　') : '';
   };
   const placeSummary = h('p', { class: 'fine', style: 'margin:0 0 6px' });
@@ -521,13 +525,15 @@ function apptSheet(ctx, series, occurrence) {
   const msg = h('p', { class: 'err', role: 'alert' });
   const title = oneOff ? 'この回だけ変更' : series ? '予定を変更' : '予定を登録';
   openSheet(title, (close) => [h('div', { 'data-keep': '' },
-    f.kind.el, placeBox, detail, h('div', { class: 'grid2' }, f.date.el, f.start.el), f.end.el, f.staff.el, f.memo.el, f.booking.el,
-    oneOff ? h('p', { class: 'fine' }, `${md(occurrence.startMs)} の回だけを変更します（他の回は変わりません）`) : recurBox, tripBox, msg),
+    f.kind.el, placeBox, detail, h('div', { class: 'grid2' }, f.date.el, f.start.el), f.memo.el,
+    h('details', { class: 'inf-detail' }, h('summary', {}, '詳細設定'), f.end.el, f.staff.el, f.booking.el,
+      oneOff ? h('p', { class: 'fine' }, `${md(occurrence.startMs)} の回だけを変更します（他の回は変わりません）`) : recurBox, tripBox), msg),
     h('button', { class: 'btn', type: 'button', on: { click: async () => {
       msg.textContent = '';
       const sMs = fromLocalInput(`${f.date.get()}T${f.start.get()}`);
       const eMs = f.end.get() ? fromLocalInput(`${f.date.get()}T${f.end.get()}`) : undefined;
       if (!sMs) { msg.textContent = '日付と開始時刻を入力してください'; return; }
+      if (f.place.input.value === '') { msg.textContent = '予定先を選んでください（該当がなければ「その他」を選びます）'; return; }
       const fr = f.freq.get();
       const data = { kind: f.kind.get(), start_ms: sMs, provider: f.provider.get(), phone: f.phone.get(), staff: f.staff.get(), memo: f.memo.get(), booking: f.booking.get() };
       if (eMs) data.end_ms = eMs;
@@ -546,6 +552,6 @@ function apptSheet(ctx, series, occurrence) {
     } } }, '確認へ'),
     h('button', { class: 'btn secondary', type: 'button', on: { click: () => close() } }, 'やめる')]);
   sync();
-  if (!series) fillFromPlace(); else detail.hidden = Boolean(initial) && initial.kinds.includes(base.kind) && places.length > 0 && f.place.input.value !== OTHER;
+  if (!series) fillFromPlace(); else detail.hidden = f.place.input.value !== OTHER;
   if (series) placeSummary.textContent = initial ? [initial.phone, initial.address].filter(Boolean).join('　') : '';
 }
