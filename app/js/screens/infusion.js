@@ -37,6 +37,10 @@ export function register(registerScreen, ctx) {
 }
 
 let mode = { view: 'main' };
+// 前回の終了処置が「FORGET（実施したか不明）」のままのとき、次の点滴の準備へ進むには確認が要る（確認した点滴の ID。画面を開き直すと忘れる）
+let acknowledgedForgot = null;
+export const acknowledgeForgot = (id) => { acknowledgedForgot = id; };
+export const FORGOT_LINES = ['前回の終了処置は「実施したか不明（FORGET）」のままです。', '実施したと確認できた場合は、先に「DONE に訂正」で記録できます。'];
 
 function renderInfusion(root, ctx) {
   const { data, now, params } = ctx;
@@ -59,8 +63,16 @@ function renderInfusion(root, ctx) {
 
   if (!cur || key === 'closed' || key === 'cancelled') {
     if (cur) root.append(summaryPanel(cur, t, ctx, order));
+    if (cur?.calc?.closureStatus === 'unknown' && acknowledgedForgot !== cur.infusion.id) {
+      // FORGET のまま次の点滴へ、無条件には進めない（確認してから）
+      root.append(h('section', { class: 'panel' }, h('p', { class: 'note', style: 'margin:0 0 8px' }, '前回の終了処置は、実施したか不明のままです'),
+        h('button', { class: 'btn soft', type: 'button', on: { click: async () => {
+          if (!await confirmSheet({ title: '次の点滴を準備しますか？', lines: FORGOT_LINES, okLabel: 'このまま準備する' })) return;
+          acknowledgedForgot = cur.infusion.id; ctx.refresh();
+        } } }, '次の点滴を準備する')));
+      return;
+    }
     root.append(preparePanel(ctx, order));
-    if (intent === 'prepare') {/* 準備の欄がそのまま見えている */}
     return;
   }
 

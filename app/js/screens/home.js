@@ -6,11 +6,11 @@
 //   最下段 状態に応じた操作ボタン
 // 状態の遷移・記録の内容・終了処置の意味（DONE＝実施済み／FORGET＝実施したか不明）は、点滴画面と同じ。
 
-import { h, clear, fmtDuration, fmtDateShort, fmtWhen, icon } from '../ui.js';
+import { h, clear, fmtDuration, fmtDateShort, fmtWhen, icon, confirmSheet } from '../ui.js';
 import { currentInfusion, currentOrder } from '../infusion-state.js';
 import { todaysOccurrences, appointmentsOf, styleOf, shortKind } from '../schedule-view.js';
 import { syncInfo } from '../status-bar.js';
-import { quickClosure, closureSheet } from './infusion.js';
+import { quickClosure, closureSheet, acknowledgeForgot, FORGOT_LINES } from './infusion.js';
 
 const STALE_SYNC_MS = 30 * 60_000;
 const MAX_CHIPS = 2;   // 予定のチップは2件まで。3件以上は「ほか○件」で、予定の画面へ
@@ -33,7 +33,10 @@ function actionsFor(ctx, cur) {
       btn('✓ DONE', async () => { const r = await quickClosure(ctx, cur, order, 'done'); if (r.ok) ctx.refresh(); }),
       btn('? FORGET', async () => { const r = await quickClosure(ctx, cur, order, 'forget'); if (r.ok) ctx.refresh(); }, 'btn btn-forget-home')];
     default:
-      if (unknownClosure) return [btn('実施を確認できた（DONE に訂正）', () => closureSheet(ctx, cur, order, true), 'btn btn-sage'), btn('次の点滴を準備', () => go('prepare'), 'btn btn-quiet')];
+      if (unknownClosure) return [btn('実施を確認できた（DONE に訂正）', () => closureSheet(ctx, cur, order, true), 'btn btn-sage'), btn('次の点滴を準備', async () => {   // FORGET のまま次へは、確認してから（無条件には進めない）
+        if (!await confirmSheet({ title: '次の点滴を準備しますか？', lines: FORGOT_LINES, okLabel: 'このまま準備する' })) return;
+        acknowledgeForgot(cur.infusion.id); go('prepare');
+      }, 'btn btn-quiet')];
       return [btn('次の点滴を準備', () => go('prepare'))];   // 完了・中止のあと
   }
 }
