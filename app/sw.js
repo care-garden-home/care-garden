@@ -3,8 +3,8 @@
 // - 背景の画像：表示した1枚だけを保存する。**44枚をまとめて先に保存しない**。保存は最大8枚で、古いものから消す
 // - 記録・同期の通信（/api など）には触れない。記録をここに保存しない
 
-const SHELL = 'cg-shell-v1';
-const BG = 'cg-bg-v1';
+const SHELL = 'cg-shell-v2';   // 背景を差し替えたとき・画面の構成を変えたときは版を上げる（activate で旧版のキャッシュを消す）
+const BG = 'cg-bg-v2';
 const BG_MAX = 8;
 const SHELL_FILES = ['./', './index.html', './css/app.css', './fonts/KaiseiDecol-400.woff2', './fonts/KaiseiDecol-500.woff2'];
 
