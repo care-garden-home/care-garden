@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="cg-mode" content="preview-only">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#e9e2f5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Care Garden">
+<title>Care Garden</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-screen="home">
+<div id="app">
+  <div id="bg" aria-hidden="true"></div>
+  <header id="bar">
+    <div id="bar-date" class="bar-date"></div>
+    <button id="bar-sync" class="bar-sync" type="button" aria-label="最新の記録を取得する"></button>
+    <div id="bar-appts" class="bar-appts" role="list" aria-label="きょうの予定" hidden></div>
+  </header>
+  <main id="view" tabindex="-1"></main>
+  <nav id="tabs" aria-label="画面の切り替え"></nav>
+</div>
+<div id="overlay" hidden></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

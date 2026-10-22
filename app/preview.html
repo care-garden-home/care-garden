@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Care Garden HOME プレビュー（PC内）</title>
+<style>
+  body { margin: 0; font: 15px/1.5 "Yu Gothic UI", "Meiryo", sans-serif; color: #2b2440; background: #e7e2ef; }
+  header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #cfc6e3; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .note { color: #8a5a00; font-size: 13px; margin: 0 0 6px; }
+  .grp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+  .grp > b { font-size: 13px; min-width: 52px; }
+  button, select, input { font: inherit; min-height: 34px; border: 1px solid #b7a9d6; border-radius: 8px; background: #fff; padding: 2px 10px; }
+  button[aria-pressed="true"] { background: #4d3f86; color: #fff; border-color: #4d3f86; }
+  main { display: flex; justify-content: center; padding: 14px; }
+  iframe { border: 2px solid #4d3f86; border-radius: 22px; background: #fff; box-shadow: 0 6px 24px rgba(43,36,64,.25); }
+</style>
+</head>
+<body>
+<header>
+  <h1>HOME プレビュー（PC内）</h1>
+  <p class="note">各状態の見え方を確かめるための画面です。通信も保存もせず、医療記録は作成・変更されません（記録の操作は「プレビューでは記録できません」になります）。点滴の状態は、架空のイベントを本番と同じ計算にかけて作っています。</p>
+  <div class="grp"><b>状態</b><span id="g-scenario"></span></div>
+  <div class="grp"><b>利用者</b><span id="g-role"></span><b style="margin-left:12px">画面</b><span id="g-size"></span></div>
+  <div class="grp"><b>時刻</b><span id="g-time"></span><input type="date" id="date"><span class="note" style="margin:0">背景の確認用（祝日・誕生日・年末年始なども日付で）</span></div>
+  <div class="grp"><b>その他</b><span id="g-flags"></span><label>誕生日の設定 <input id="birthday" placeholder="例 10-21" size="6"></label></div>
+</header>
+<main><iframe id="frame" title="HOME"></iframe></main>
+<script type="module">
+const SC = { history: '履歴の一覧（点滴画面）', none: '準備なし（開始前）', planned: '開始待ち', running: '投与中', paused: '一時中断', ended: '投与終了・終了処置未完了', closed: '終了処置完了', cancelled: '中止' };
+const SIZES = { se: [375, 667, 'iPhone SE 375×667'], std: [390, 844, '390×844'] };
+const TIMES = { dawn: ['2:00', '深夜 2:00'], morning: ['8:00', '朝 8:00'], noon: ['13:00', '昼 13:00'], evening: ['18:00', '夕 18:00'], night: ['22:00', '夜 22:00'] };
+const FLAGS = { stale: '最後の同期が30分以上前', unsent: '未送信 2件', rejected: '保存できていない記録あり', noextras: '針交換の予定なし' };
+const st = { scenario: 'running', role: 'admin', size: 'se', time: 'evening', date: '', stale: false, unsent: false, rejected: false, noextras: false, birthday: '' };
+const $ = (id) => document.getElementById(id);
+const JST = 9 * 3_600_000;
+
+function group(id, map, key, labelOf = (v) => v) {
+  const box = $(id); box.textContent = '';
+  for (const [k, v] of Object.entries(map)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = labelOf(v);
+    b.setAttribute('aria-pressed', String(st[key] === k)); b.addEventListener('click', () => { st[key] = k; draw(); }); box.append(b);
+  }
+}
+function flags() {
+  const box = $('g-flags'); box.textContent = '';
+  for (const [k, label] of Object.entries(FLAGS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', String(st[k]));
+    b.addEventListener('click', () => { st[k] = !st[k]; draw(); }); box.append(b);
+  }
+}
+function nowMs() {
+  const d = st.date || new Date(Date.now() + JST).toISOString().slice(0, 10);
+  const [h, m] = TIMES[st.time][0].split(':').map(Number);
+  const [y, mo, da] = d.split('-').map(Number);
+  return Date.UTC(y, mo - 1, da, h, m) - JST;
+}
+function draw() {
+  group('g-scenario', SC, 'scenario'); group('g-role', { admin: '管理者', mother: '母' }, 'role'); group('g-size', SIZES, 'size', (v) => v[2]); group('g-time', TIMES, 'time', (v) => v[1]); flags();
+  const [w, h] = SIZES[st.size];
+  const f = $('frame'); f.width = w; f.height = h;
+  const p = new URLSearchParams({ preview: st.scenario, role: st.role, now: String(nowMs()) });
+  if (st.scenario === 'history') p.set('screen', 'history');
+  if (st.stale) p.set('stale', '1'); if (st.unsent) p.set('unsent', '2'); if (st.rejected) p.set('rejected', '1'); if (st.noextras) p.set('extras', '0');
+  if (/^\d{1,2}-\d{1,2}$/.test(st.birthday)) p.set('birthday', st.birthday);
+  f.src = `index.html?${p}`;
+}
+$('date').addEventListener('change', (e) => { st.date = e.target.value; draw(); });
+$('birthday').addEventListener('change', (e) => { st.birthday = e.target.value.trim(); draw(); });
+draw();
+</script>
+</body>
+</html>

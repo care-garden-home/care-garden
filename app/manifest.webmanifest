@@ -1,0 +1,12 @@
+{
+  "name": "Care Garden",
+  "short_name": "Care Garden",
+  "description": "在宅療養の点滴・ケア記録",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#efeaf8",
+  "theme_color": "#e9e2f5"
+}
